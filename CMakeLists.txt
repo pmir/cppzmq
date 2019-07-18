@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.0.0)
 
+option(BUILD_SHARED "Whether or not to build the shared object"  ON)
+option(BUILD_STATIC "Whether or not to build the static archive" ON)
+
 list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include (DetectCPPZMQVersion)
@@ -20,8 +23,13 @@ if(NOT ZeroMQ_FOUND)
     message(FATAL_ERROR "ZeroMQ was not found, neither as a CMake package nor via pkg-config")
 endif()
 
-if (ZeroMQ_FOUND AND (NOT TARGET libzmq OR NOT TARGET libzmq-static))
-  message(FATAL_ERROR "ZeroMQ version not supported!")
+if (ZeroMQ_FOUND)
+    if (BUILD_SHARED AND NOT TARGET libzmq)
+        message(FATAL_ERROR "ZeroMQ shared library not found")
+    endif()
+    if(BUILD_STATIC AND NOT TARGET libzmq-static)
+        message(FATAL_ERROR "ZeroMQ static library not found")
+    endif()
 endif()
 
 if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
@@ -43,20 +51,41 @@ set(CPPZMQ_HEADERS
     zmq_addon.hpp
 )
 
-foreach (target cppzmq cppzmq-static)
-  add_library(${target} INTERFACE)
-  target_include_directories(${target} INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                                                 $<INSTALL_INTERFACE:include>)
-endforeach()
-
-target_link_libraries(cppzmq INTERFACE libzmq)
-target_link_libraries(cppzmq-static INTERFACE libzmq-static)
-
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-install(TARGETS cppzmq cppzmq-static
-        EXPORT ${PROJECT_NAME}-targets)
+if (BUILD_SHARED)
+    add_library(cppzmq INTERFACE)
+    target_include_directories(
+            cppzmq
+            INTERFACE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+            $<INSTALL_INTERFACE:include>
+    )
+
+    target_link_libraries(cppzmq INTERFACE libzmq)
+    install(
+            TARGETS cppzmq
+            EXPORT cppzmq-targets
+    )
+endif ()
+
+if (BUILD_STATIC)
+    add_library(cppzmq-static INTERFACE)
+    target_include_directories(
+            cppzmq-static
+            INTERFACE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+            $<INSTALL_INTERFACE:include>
+    )
+
+    target_link_libraries(cppzmq-static INTERFACE libzmq-static)
+    install(
+            TARGETS cppzmq-static
+            EXPORT cppzmq-targets
+    )
+endif ()
+
 
 install(FILES ${CPPZMQ_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
